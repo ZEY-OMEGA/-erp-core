@@ -1,0 +1,25 @@
+
+FROM python:3.9-slim
+
+WORKDIR /app
+
+# تثبيت الصوتيات (للاستماع الصوتي)
+RUN apt-get update && apt-get install -y \
+    libasound2 \
+    alsa-utils \
+    portaudio19-dev \
+    pulseaudio \
+    && rm -rf /var/lib/apt/lists/*
+
+# نسخ ملفات النظام
+COPY . .
+
+# تثبيت المتطلبات
+RUN pip install --no-cache-dir flask numpy speechrecognition pyttsx3 pyaudio requests
+
+# فتح المنفذ 5000
+EXPOSE 5000
+
+# تشغيل النظام
+CMD ["python", "interfaces/dashboard.py"]
+```

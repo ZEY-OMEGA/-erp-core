@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}">
+<head>
+    <meta charset="UTF-8">
+    <title>Zey Omega ERP - لوحة المراقبة</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            margin: 0; 
+            padding: 20px; 
+            direction: {{ 'rtl' if lang == 'ar' else 'ltr' }}; 
+            text-align: {{ 'right' if lang == 'ar' else 'left' }}; 
+            background: linear-gradient(135deg, #1e3c72, #2a5298); 
+            color: white; 
+        }
+        .container { 
+            max-width: 1200px; 
+            margin: auto; 
+            background: rgba(0,0,0,0.2); 
+            padding: 20px; 
+            border-radius: 15px; 
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3); 
+        }
+        h1, h2 { color: #fff; }
+        .grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); 
+            gap: 20px; 
+            margin: 20px 0; 
+        }
+        .card { 
+            background: rgba(255,255,255,0.1); 
+            padding: 15px; 
+            border-radius: 10px; 
+            backdrop-filter: blur(10px); 
+        }
+        .input-section { 
+            margin: 20px 0; 
+        }
+        input[type="text"] { 
+            width: 70%; 
+            padding: 10px; 
+            border: none; 
+            border-radius: 5px; 
+            font-size: 16px; 
+        }
+        button { 
+            padding: 10px 15px; 
+            background: #f39c12; 
+            color: white; 
+            border: none; 
+            border-radius: 5px; 
+            cursor: pointer; 
+            font-size: 16px; 
+        }
+        button:hover { 
+            background: #e67e22; 
+        }
+        ul { 
+            list-style-type: none; 
+            padding: 0; 
+        }
+        li { 
+            padding: 8px 0; 
+            border-bottom: 1px solid rgba(255,255,255,0.1); 
+        }
+        .badge { 
+            display: inline-block; 
+            padding: 3px 8px; 
+            border-radius: 12px; 
+            font-size: 12px; 
+            margin-right: 5px; 
+        }
+        .activation { background: #e74c3c; }
+        .amplification { background: #f39c12; }
+        .harvesting { background: #2ecc71; }
+        .recalibration { background: #3498db; }
+        .standby { background: #95a5a6; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>{% if lang == 'ar' %}لوحة مراقبة Zey Omega ERP{% else %}Zey Omega ERP Dashboard{% endif %}</h1>
+        
+        <!-- مدخل الأمر -->
+        <div class="input-section">
+            <input type="text" id="commandInput" placeholder="{% if lang == 'ar' %}أدخل أمرك هنا...{% else %}Enter your command here...{% endif %}">
+            <button onclick="sendCommand()">{% if lang == 'ar' %}إرسال{% else %}Send{% endif %}</button>
+            <button onclick="window.location.href='/en'">{% if lang == 'ar' %}English{% else %}عربي{% endif %}</button>
+        </div>
+
+        <!-- البطاقات الأساسية -->
+        <div class="grid">
+            <div class="card">
+                <h2>{% if lang == 'ar' %}حالة النظام{% else %}System Status{% endif %}</h2>
+                <p><strong>{% if lang == 'ar' %}المرحلة:{% else %}Phase:{% endif %}</strong> <span id="phase">-</span></p>
+                <p><strong>{% if lang == 'ar' %}درجة التماسك (v):{% else %}Coherence (v):{% endif %}</strong> <span id="v">-</span></p>
+                <p><strong>{% if lang == 'ar' %}تقدم التنفيذ (η):{% else %}Execution Progress (η):%endif %}</strong> <span id="eta">-</span></p>
+                <p><strong>{% if lang == 'ar' %}الهدف الحالي:{% else %}Current Goal:{% endif %}</strong> <span id="goal">-</span></p>
+            </div>
+
+            <div class="card">
+                <h2>{% if lang == 'ar' %}رسم بياني للتماسك{% else %}Coherence Chart{% endif %}</h2>
+                <canvas id="coherenceChart"></canvas>
+            </div>
+        </div>
+
+        <!-- السجلات -->
+        <div class="grid">
+            <div class="card">
+                <h2>{% if lang == 'ar' %}الأوامر الأخيرة{% else %}Recent Commands{% endif %}</h2>
+                <ul id="commandsList"></ul>
+            </div>
+
+            <div class="card">
+                <h2>{% if lang == 'ar' %}سجل التنفيذ{% else %}Execution Log{% endif %}</h2>
+                <ul id="historyList"></ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // رسم بياني
+        const ctx = document.getElementById('coherenceChart').getContext('2d');
+        const coherenceChart = new Chart(ctx, {
+            type: 'line',
+             {
+                labels: Array(10).fill(''),
+                datasets: [{
+                    label: '{{ 'التماسك البنائي C(t)' if lang == 'ar' else 'Constructive Coherence C(t)' }}',
+                     Array(10).fill(1.0),
+                    borderColor: '#f39c12',
+                    backgroundColor: 'rgba(243, 156, 18, 0.1)',
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { color: 'white' }
+                },
+                scales: {
+                    y: { min: 0, max: 1.2 }
+                }
+            }
+        });
+
+        function updateDashboard(data) {
+            document.getElementById('phase').textContent = data.phase;
+            document.getElementById('v').textContent = data.v;
+            document.getElementById('eta').textContent = data.eta;
+            document.getElementById('goal').textContent = data.goal || 'لا يوجد';
+
+            // تحديث الرسم البياني
+            coherenceChart.data.labels.push(new Date().toLocaleTimeString());
+            coherenceChart.data.datasets[0].data.push(data.v);
+            if (coherenceChart.data.labels.length > 10) {
+                coherenceChart.data.labels.shift();
+                coherenceChart.data.datasets[0].data.shift();
+            }
+            coherenceChart.update();
+
+            // تحديث الأوامر
+            if (data.commands && data.commands.length > 0) {
+                const cmd = data.commands[data.commands.length - 1];
+                $('#commandsList').prepend(`<li>${cmd.timestamp}: "${cmd.input}" → ${cmd.goal || 'مرفوض'}</li>`);
+            }
+
+            // تحديث السجل
+            if (data.history && data.history.length > 0) {
+                const event = data.history[data.history.length - 1];
+                const badgeClass = `badge ${event.phase.toLowerCase()}`;
+                $('#historyList').prepend(`<li>${event.timestamp}: <span class="${badgeClass}">${event.phase}</span> | v=${event.v} | η=${event.eta}</li>`);
+            }
+        }
+
+        function sendCommand() {
+            const input = document.getElementById('commandInput').value;
+            if (!input.trim()) return;
+
+            $.post('/api/process', JSON.stringify({command: input}), function(res) {
+                document.getElementById('commandInput').value = '';
+                fetchStatus(); // تحديث فوري
+            });
+        }
+
+        function fetchStatus() {
+            $.get('/api/status', function(data) {
+                updateDashboard(data);
+            });
+        }
+
+        // تحديث تلقائي كل ثانية
+        setInterval(fetchStatus, 1000);
+
+        // تحميل الحالة عند بدء التشغيل
+        fetchStatus();
+    </script>
+</body>
+</html>
+```

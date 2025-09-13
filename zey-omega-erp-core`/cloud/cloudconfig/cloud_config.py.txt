@@ -1,0 +1,56 @@
+import os
+
+class Config:
+    # قاعدة البيانات
+    SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL', 'postgresql://zeyadmin:securepass123@postgres:5432/zey_erp_db')
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+
+    # Redis (للتخزين المؤقت)
+    REDIS_URL = os.getenv('REDIS_URL', 'redis://redis:6379/0')
+
+    # DPP Integration
+    DPP_API_BASE_URL = "https://dpp.gov.ae/api/v1"
+    DPP_CLIENT_ID = os.getenv('DPP_CLIENT_ID')
+    DPP_CLIENT_SECRET = os.getenv('DPP_CLIENT_SECRET')
+
+    # UAEPASS Authentication
+    UAEPASS_BASE_URL = "https://stg-auth.sso.gov.ae"
+    UAEPASS_CLIENT_ID = os.getenv('UAEPASS_CLIENT_ID')
+    UAEPASS_REDIRECT_URI = "https://localhost:5000/auth/callback"
+
+    # ICV Settings
+    ICV_CERTIFICATION_LEVEL = "Platinum"
+    ICV_REGION = "UAE"
+
+    # Logging
+    LOGGING_CONFIG = {
+        'version': 1,
+        'disable_existing_loggers': False,
+        'formatters': {
+            'standard': {
+                'format': '%(asctime)s [%(levelname)s] %(name)s: %(message)s'
+            },
+        },
+        'handlers': {
+            'console': {
+                'level': 'INFO',
+                'class': 'logging.StreamHandler',
+                'formatter': 'standard'
+            },
+            'file': {
+                'level': 'DEBUG',
+                'class': 'logging.handlers.RotatingFileHandler',
+                'filename': 'logs/app.log',
+                'maxBytes': 10*1024*1024,  # 10 MB
+                'backupCount': 5,
+                'formatter': 'standard',
+            },
+        },
+        'loggers': {
+            '': {  # root logger
+                'handlers': ['console', 'file'],
+                'level': 'DEBUG',
+                'propagate': False
+            }
+        }
+    }

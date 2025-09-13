@@ -1,0 +1,219 @@
+
+import speech_recognition as sr
+from core.ats_core_pro import ATSCorePro
+from core.ethics_guard import EthicsAndComplianceGuard
+from core.decision_trigger import DecisionTriggerProtocol
+import pyttsx3
+import threading
+import time
+
+
+class MultilingualVoiceInterface:
+    """
+    واجهة صوتية ذكية تدعم الأوامر الطبيعية بالعربية والإنجليزية
+    وتُعالجها عبر UCCP Processor وتنفذها باستخدام ATSCorePro
+    """
+
+    def __init__(self):
+        self.recognizer = sr.Recognizer()
+        self.microphone = sr.Microphone()
+        
+        # إنشاء النواة التنفيذية
+        self.ats = ATSCorePro()
+        self.ethics = EthicsAndComplianceGuard()
+        self.trigger = DecisionTriggerProtocol(self.ats)
+        
+        # إعداد الصوت
+        self.engine = pyttsx3.init()
+        self.engine.setProperty('rate', 180)
+        self.engine.setProperty('volume', 1.0)
+
+        # اختيار صوت عربي/إنجليزي حسب الحاجة
+        voices = self.engine.getProperty('voices')
+        self.arabic_voice = None
+        self.english_voice = None
+        for voice in voices:
+            if "ar" in str(voice.languages) or "Arabic" in voice.name:
+                self.arabic_voice = voice
+            if "en" in str(voice.languages) or "English" in voice.name:
+                self.english_voice = voice
+
+        self.is_listening = False
+        print("🟢 تم تشغيل Multilingual Voice Interface بنجاح")
+        print("   يدعم الأوامر بالعربية والإنجليزية")
+
+    def speak(self, text: str, lang: str = "ar"):
+        """
+        إخراج صوتي بلغة مطابقة
+        """
+        def run():
+            if lang == "ar" and self.arabic_voice:
+                self.engine.setProperty('voice', self.arabic_voice.id)
+            elif self.english_voice:
+                self.engine.setProperty('voice', self.english_voice.id)
+            self.engine.say(text)
+            self.engine.runAndWait()
+
+        thread = threading.Thread(target=run)
+        thread.start()
+
+    def detect_language(self, text: str) -> str:
+        """
+        كشف اللغة تلقائيًا
+        """
+        arabic_chars = set("أبتثجحخدذرزسشصضطظعغفقكلمنهوىي")
+        return "ar" if any(c in text for c in arabic_chars) else "en"
+
+    def listen_once(self) -> tuple:
+        """
+        الاستماع مرة واحدة والحصول على نص
+        """
+        with self.microphone as source:
+            print("🎙️ جاري الاستماع...")
+            self.recognizer.adjust_for_ambient_noise(source, duration=1)
+            try:
+                audio = self.recognizer.listen(source, timeout=5, phrase_time_limit=10)
+                # أولًا: محاولة التعرف على العربية
+                try:
+                    text = self.recognizer.recognize_google(audio, language="ar-SA")
+                    print(f"🔊 تم التعرف (عربي): {text}")
+                    return text, "ar"
+                except sr.UnknownValueError:
+                    # ثانيًا: محاولة التعرف على الإنجليزية
+                    try:
+                        text = self.recognizer.recognize_google(audio, language="en-US")
+                        print(f"🔊 تم التعرف (إنجليزي): {text}")
+                        return text, "en"
+                    except sr.UnknownValueError:
+                        error_msg = "لم أفهم ما قلته. هل يمكنك تكرار ذلك؟"
+                        print(f"❌ {error_msg}")
+                        self.speak(error_msg, "ar")
+                        return None, None
+            except sr.WaitTimeoutError:
+                timeout_msg = "انتهى وقت الاستماع. لم يتم اكتشاف صوت."
+                print(f"⏰ {timeout_msg}")
+                self.speak(timeout_msg, "ar")
+                return None, None
+            except Exception as e:
+                print(f"🔴 خطأ في الاستماع: {e}")
+                self.speak("حدث خطأ تقني أثناء الاستماع.", "ar")
+                return None, None
+
+    def parse_command(self, raw_input: str) -> dict:
+        """
+        تحليل الأمر إلى فعل وهدف
+        """
+        raw_input = raw_input.strip().lower()
+        command = {"raw": raw_input, "action": None, "target": None}
+
+        # استخراج الفعل
+        if any(word in raw_input for word in ["أوقف", "ايقاف", "توقف"]):
+            command["action"] = "stop"
+        elif any(word in raw_input for word in ["ارفع", "زيادة", "رفع"]):
+            command["action"] = "increase"
+        elif any(word in raw_input for word in ["أنشئ", "افتح", "ابدأ"]):
+            command["action"] = "create"
+        elif any(word in raw_input for word in ["وزع", "أرسل", "حوّل"]):
+            command["action"] = "distribute"
+        elif any(word in raw_input for word in ["حدّث", "عدّل", "غير"]):
+            command["action"] = "update"
+        elif any(word in raw_input for word in ["أبلغ", "أظهر", "عرض"]):
+            command["action"] = "report"
+        elif any(word in raw_input for word in ["ابحث", "جد", "استكشف"]):
+            command["action"] = "find"
+
+        # استخراج الهدف
+        if any(word in raw_input for word in ["مبيعات", "بيع", "sales"]):
+            command["target"] = "sales"
+        elif any(word in raw_input for word in ["مخزون", "مستودع", "inventory"]):
+            command["target"] = "inventory"
+        elif any(word in raw_input for word in ["محاسبة", "ميزانية", "finance"]):
+            command["target"] = "finance"
+        elif any(word in raw_input for word in ["موظفين", "حضور", "hr"]):
+            command["target"] = "hr"
+        elif any(word in raw_input for word in ["مشاريع", "planning"]):
+            command["target"] = "projects"
+        elif any(word in raw_input for word in ["تأمين", "مطالبات", "insurance"]):
+            command["target"] = "insurance"
+
+        return command
+
+    def validate_and_process(self, command: dict):
+        """
+        التحقق الأخلاقي ومعالجة الطلب
+        """
+        result = self.ethics.validate_and_respond(command)
+        if result["allowed"]:
+            goal_text = f"{command['action']}_{command['target']}"
+            self.ats.g = goal_text
+            print(f"✅ تم فهم الطلب: '{goal_text}'")
+            print("🔄 جاري مراقبة نقطة القرار...")
+        else:
+            print(f"❌ تم رفض الطلب: {result['explanation']}")
+
+    def start_continuous_listening(self):
+        """
+        بدء الاستماع المستمر
+        """
+        self.is_listening = True
+        intro = "جارٍ الاستماع للأوامر. قل 'توقف' في أي وقت لإيقاف النظام."
+        print(intro)
+        self.speak(intro, "ar")
+
+        while self.is_listening:
+            command_text, lang = self.listen_once()
+            if command_text:
+                lower_cmd = command_text.lower()
+                if any(word in lower_cmd for word in ["توقف", "stop listening", "اكف عن الاستماع"]):
+                    self.is_listening = False
+                    farewell = "تم إيقاف الاستماع. شكرًا لك."
+                    print(farewell)
+                    self.speak(farewell, "ar")
+                    break
+                else:
+                    command = self.parse_command(command_text)
+                    self.validate_and_process(command)
+            time.sleep(1)
+
+    def start(self):
+        """
+        التشغيل التفاعلي للواجهة الصوتية
+        """
+        welcome = "مرحبًا بك في نظام Zey Omega ERP الصوتي. قل 'استمع' للبدء."
+        print(welcome)
+        self.speak(welcome, "ar")
+
+        while True:
+            command_text, lang = self.listen_once()
+            if command_text:
+                lower_cmd = command_text.lower()
+                if any(word in lower_cmd for word in ["استمع", "ابدأ الاستماع", "listen", "start"]):
+                    # تشغيل مراقبة نقطة القرار في خيط منفصل
+                    trigger_thread = threading.Thread(target=self.trigger.start_monitoring, daemon=True)
+                    trigger_thread.start()
+                    
+                    self.start_continuous_listening()
+                    self.speak("هل تريد أن أبدأ بالاستماع مرة أخرى؟ قل 'استمع'.", "ar")
+                elif any(word in lower_cmd for word in ["وداعًا", "goodbye", "exit", "انهِ"]):
+                    self.speak("وداعًا! حتى اللقاء.", "ar")
+                    break
+                else:
+                    self.speak("قل 'استمع' للبدء، أو 'وداعًا' للإغلاق.", "ar")
+
+
+# ===========================
+# دالة اختبارية
+# ===========================
+
+def test_voice_interface():
+    """
+    دالة اختبارية لتشغيل الواجهة الصوتية
+    """
+    print("🧪 بدء اختبار Multilingual Voice Interface...")
+    voice = MultilingualVoiceInterface()
+    voice.start()
+
+
+if __name__ == "__main__":
+    test_voice_interface()
+```

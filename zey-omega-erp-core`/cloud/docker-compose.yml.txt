@@ -1,0 +1,48 @@
+```yaml
+# cloud/docker-compose.yml
+# تعريف الخدمات السحابية لنظام Zey Omega ERP
+
+version: '3.8'
+
+services:
+  zey-omega-erp:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=production
+    volumes:
+      - ./logs:/app/logs
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: on-failure
+    networks:
+      - zey-network
+
+  redis:
+    image: redis:7-alpine
+    networks:
+      - zey-network
+    volumes:
+      - redis-data:/data
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: zey_erp_db
+      POSTGRES_USER: zeyadmin
+      POSTGRES_PASSWORD: securepass123
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - zey-network
+
+networks:
+  zey-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+  postgres-data:
+```

@@ -1,0 +1,123 @@
+
+from interfaces.voice_interface import MultilingualVoiceInterface
+from interfaces.dashboard import app as dashboard_app
+from integration.api_bridge import APIIntegrationBridge
+from core.ats_core_pro import ATSCorePro
+from core.ethics_guard import EthicsAndComplianceGuard
+from core.decision_trigger import DecisionTriggerProtocol
+from core.coherence_chain import CoherenceChain
+import threading
+import time
+
+
+def initialize_system():
+    """
+    تهيئة النظام بالكامل
+    """
+    print("🚀 إطلاق نظام Zey Omega ERP - النواة المشتركة v1.0")
+    print("=" * 60)
+
+    # إنشاء النواة التنفيذية
+    ats = ATSCorePro()
+    ethics = EthicsAndComplianceGuard()
+    trigger = DecisionTriggerProtocol(ats)
+    chain = ats.coherence_chain
+
+    # إنشاء جسر التكامل
+    bridge = APIIntegrationBridge()
+
+    # تشغيل لوحة المراقبة في خيط منفصل
+    dashboard_thread = threading.Thread(target=run_dashboard, daemon=True)
+    dashboard_thread.start()
+
+    # تشغيل مراقبة نقطة القرار
+    trigger_thread = threading.Thread(target=trigger.start_monitoring, daemon=True)
+    trigger_thread.start()
+
+    # عرض حالة الاتصال الأولية
+    print("\n🔗 اتصالات النظام:")
+    bridge.connect("dpp", {
+        "base_url": "https://dpp.gov.ae/api/v1",
+        "client_id": "ZeyOmega_Client_123",
+        "client_secret": "secure_secret_456"
+    })
+    bridge.connect("bravo", {
+        "base_url": "https://api.bravoadvantage.com/v1",
+        "api_key": "your_bravo_api_key"
+    })
+
+    return ats, ethics, trigger, bridge, chain
+
+
+def run_dashboard():
+    """
+    تشغيل لوحة المراقبة الحية
+    """
+    try:
+        from gevent.pywsgi import WSGIServer
+        http_server = WSGIServer(('0.0.0.0', 5000), dashboard_app)
+        print("🌐 Real-Time Synchronization Dashboard يعمل على http://localhost:5000")
+        http_server.serve_forever()
+    except ImportError:
+        # إذا لم يكن gevent مثبتًا، استخدم Flask العادي
+        dashboard_app.run(debug=False, host='0.0.0.0', port=5000)
+
+
+def demonstrate_compliance_proof(chain):
+    """
+    عرض دليل رقمي للنزاهة (مهم لـ DPP والمناقصات)
+    """
+    print("\n" + "="*60)
+    print("📄 إصدار الدليل الرقمي للامتثال (Coherence Chain Proof)")
+    proof_file = "compliance_proof_zey_omega.json"
+    chain.export_proof(proof_file)
+    
+    report = chain.audit_report()
+    print(f"\n📋 تقرير تدقيق السلسلة:")
+    for key, value in report.items():
+        if key != "recommendations":
+            print(f"   {key}: {value}")
+    print("   recommendations:")
+    for rec in report["recommendations"]:
+        print(f"     • {rec}")
+
+
+if __name__ == "__main__":
+    # تهيئة النظام
+    ats, ethics, trigger, bridge, chain = initialize_system()
+    
+    # بدء الواجهة الصوتية
+    print("\n" + "="*60)
+    voice_interface = MultilingualVoiceInterface()
+    voice_interface.start()
+    
+    # بعد انتهاء الجلسة (أو عند الحاجة)، إصدار دليل الامتثال
+    # ملاحظة: في بيئة حقيقية، يتم ذلك تلقائيًا أو عند طلب مناقصة
+    time.sleep(5)  # تأخير بسيط للمحاكاة
+    demonstrate_compliance_proof(chain)
+```
+
+---
+
+✅ **تم الانتهاء!**
+
+لقد أرسلت لك جميع الملفات الـ **14** التي تشكل **النواة المشتركة الكاملة والمتكاملة** لـ **Zey Omega ERP v1.0**.
+
+---
+
+### ✅ ملخص الملفات المرسلة
+
+| # | المسار | الوصف |
+|---|-------|------|
+| 1 | `core/ats_core_pro.py` | النواة التنفيذية الذكية |
+| 2 | `core/ethics_guard.py` | الحارس الأخلاقي والتنظيمي |
+| 3 | `core/decision_trigger.py` | بروتوكول إطلاق القرار عند فقدان التماسك |
+| 4 | `core/coherence_chain.py` | السلسلة التماسكية لتوثيق العمليات |
+| 5 | `interfaces/voice_interface.py` | واجهة الأوامر الصوتية متعددة اللغات |
+| 6 | `interfaces/dashboard.py` | لوحة المراقبة الحية |
+| 7 | `integration/api_bridge.py` | جسر التكامل مع الأنظمة الخارجية (DPP, Oracle, Bravo) |
+| 8 | `cloud/Dockerfile` | ملف بناء الحاوية السحابية |
+| 9 | `cloud/docker-compose.yml` | تكوين تشغيل النظام كخدمة سحابية |
+| 10 | `cloud/config/cloud_config.py` | إعدادات التشغيل السحابي |
+| 11 | `templates/dashboard.html` | واجهة المستخدم الرسومية |
+| 12 | `main.py` | نقطة الدخول والتشغيل الرئيسي |

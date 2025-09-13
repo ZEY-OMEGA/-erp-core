@@ -1,0 +1,262 @@
+
+import requests
+import json
+from typing import Dict, Any, Optional
+from urllib.parse import urljoin
+import jwt
+from datetime import datetime, timedelta
+
+
+class APIIntegrationBridge:
+    """
+    الجسر الذكي للتكامل مع الأنظمة الخارجية
+    يدعم التكامل مع Oracle, SAP, DPP, BravoAdvantage, UAEPASS
+    """
+
+    def __init__(self):
+        self.adapters = {
+            "oracle": self.oracle_adapter,
+            "sap": self.sap_adapter,
+            "dpp": self.dpp_adapter,
+            "bravo": self.bravo_adapter,
+            "uaepass": self.uaepass_adapter
+        }
+        self.active_connections = {}
+        print("🟢 تم تشغيل API Integration Bridge بنجاح")
+
+    def connect(self, system_type: str, config: Dict[str, Any]) -> bool:
+        """
+        إنشاء اتصال نشط مع النظام الخارجي
+        """
+        if system_type not in self.adapters:
+            print(f"❌ نوع النظام غير مدعوم: {system_type}")
+            return False
+
+        try:
+            adapter = self.adapters[system_type]
+            connection = adapter("connect", {}, config)
+            if connection.get("success"):
+                self.active_connections[system_type] = {
+                    "config": config,
+                    "last_connected": datetime.now().isoformat()
+                }
+                print(f"✅ تم الاتصال بنجاح بالنظام: {system_type.upper()}")
+                return True
+            else:
+                print(f"❌ فشل الاتصال بالنظام: {system_type} | السبب: {connection.get('error')}")
+                return False
+        except Exception as e:
+            print(f"🔴 خطأ تقني عند الاتصال: {e}")
+            return False
+
+    def execute(self, system_type: str, action: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        تنفيذ أمر على النظام الخارجي عبر الجسر
+        """
+        if system_type not in self.active_connections:
+            return {"success": False, "error": f"لا يوجد اتصال نشط مع {system_type}"}
+
+        try:
+            adapter = self.adapters[system_type]
+            result = adapter(action, data, self.active_connections[system_type]["config"])
+            return result
+        except Exception as e:
+            return {"success": False, "error": f"خطأ في التنفيذ: {str(e)}"}
+
+    # --- المحولات (Adapters) لكل نظام ---
+
+    def oracle_adapter(self, action: str,  Dict[str, Any], config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        محول التكامل مع Oracle Cloud ERP
+        """
+        base_url = config.get("base_url")
+        headers = {"Authorization": f"Bearer {config.get('token')}", "Content-Type": "application/json"}
+
+        endpoints = {
+            "create_project": "/projects",
+            "update_inventory": "/inventory",
+            "get_financials": "/financials"
+        }
+
+        try:
+            if action == "connect":
+                # اختبار الاتصال
+                response = requests.get(urljoin(base_url, "/health"), headers=headers)
+                return {"success": response.status_code == 200}
+
+            endpoint = endpoints.get(action)
+            if not endpoint:
+                return {"success": False, "error": "إجراء غير معروف"}
+
+            url = urljoin(base_url, endpoint)
+            response = requests.post(url, json=data, headers=headers)
+            return response.json() if response.ok else {"success": False, "error": response.text}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def sap_adapter(self, action: str,  Dict[str, Any], config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        محول التكامل مع SAP S/4HANA
+        """
+        base_url = config.get("base_url")
+        auth = (config.get("username"), config.get("password"))
+
+        try:
+            if action == "connect":
+                response = requests.get(urljoin(base_url, "/Ping"), auth=auth)
+                return {"success": response.status_code == 200}
+
+            # في SAP، يتم استخدام RFC أو OData
+            if action == "migrate_data":
+                # مثال: ترحيل بيانات البيع اليوم
+                payload = {
+                    "SalesOrder": data.get("order_id"),
+                    "SoldToParty": data.get("customer_id"),
+                    "Item": [{"Material": item["sku"], "Quantity": item["qty"]} for item in data.get("items", [])]
+                }
+                url = urljoin(base_url, "/sap/opu/odata/sap/API_SALES_ORDER_SRV/A_SalesOrder")
+                response = requests.post(url, json=payload, auth=auth)
+                return {"success": response.ok, "data": response.json() if response.ok else response.text}
+            else:
+                return {"success": False, "error": "إجراء غير معروف في SAP"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def dpp_adapter(self, action: str,  Dict[str, Any], config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        محول التكامل مع منصة الشراء الرقمية الاتحادية (DPP)
+        """
+        base_url = config.get("base_url", "https://dpp.gov.ae/api/v1")
+        client_id = config.get("client_id")
+        client_secret = config.get("client_secret")
+
+        def get_token():
+            token_url = f"{base_url}/oauth/token"
+            payload = {
+                'grant_type': 'client_credentials',
+                'client_id': client_id,
+                'client_secret': client_secret
+            }
+            response = requests.post(token_url, data=payload)
+            return response.json().get("access_token") if response.ok else None
+
+        try:
+            if action == "connect":
+                token = get_token()
+                if token:
+                    return {"success": True, "token": token[:10] + "..."}
+                else:
+                    return {"success": False, "error": "فشل في الحصول على رمز DPP"}
+
+            token = get_token()
+            if not token:
+                return {"success": False, "error": "رمز DPP غير صالح"}
+
+            headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+            if action == "submit_tender_response":
+                url = f"{base_url}/procurement/responses"
+                payload = {
+                    "rfqNumber": data.get("rfq_number"),
+                    "vendorId": "ZeyOmega_ERP",
+                    "solutionDetails": data.get("solution"),
+                    "submissionDate": datetime.now().isoformat(),
+                    "icvCertification": "Platinum"
+                }
+                response = requests.post(url, json=payload, headers=headers)
+                return {"success": response.ok, "response": response.json()}
+            else:
+                return {"success": False, "error": "إجراء غير معروف في DPP"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def bravo_adapter(self, action: str, data: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        محول التكامل مع BravoAdvantage
+        """
+        base_url = config.get("base_url", "https://api.bravoadvantage.com/v1")
+        api_key = config.get("api_key")
+
+        headers = {"X-API-Key": api_key, "Content-Type": "application/json"}
+
+        try:
+            if action == "connect":
+                response = requests.get(f"{base_url}/ping", headers=headers)
+                return {"success": response.status_code == 200}
+
+            if action == "stop_supplier_contract":
+                supplier_id = data.get("supplier_id")
+                reason = data.get("reason", "Performance issues")
+                url = f"{base_url}/suppliers/{supplier_id}/contract"
+                payload = {"status": "suspended", "reason": reason}
+                response = requests.patch(url, json=payload, headers=headers)
+                return {"success": response.ok, "data": response.json()}
+            elif action == "find_cheaper_alternative":
+                category = data.get("category")
+                budget = data.get("budget")
+                url = f"{base_url}/suppliers/search?category={category}&max_price={budget}"
+                response = requests.get(url, headers=headers)
+                return {"success": response.ok, "alternatives": response.json()}
+            else:
+                return {"success": False, "error": "إجراء غير معروف في BravoAdvantage"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def uaepass_adapter(self, action: str,  Dict[str, Any], config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        محول التكامل مع UAEPASS للهوية الرقمية
+        """
+        base_url = config.get("base_url", "https://prod-auth.sso.gov.ae")
+        client_id = config.get("client_id")
+        redirect_uri = config.get("redirect_uri")
+
+        try:
+            if action == "connect":
+                # التحقق من توفر الخدمة
+                response = requests.get(f"{base_url}/.well-known/openid-configuration")
+                return {"success": response.ok}
+
+            if action == "authenticate_user":
+                # هذه خطوة تتم عادة عبر إعادة التوجيه، هنا نمثل النتيجة
+                user_emirates_id = data.get("emirates_id")
+                # في التطبيق الحقيقي، سيتم التحقق عبر OAuth2
+                return {
+                    "success": True,
+                    "user": {
+                        "emirates_id": user_emirates_id,
+                        "name": "Ahmed Al Mansoori",
+                        "role": "Procurement Manager",
+                        "organization": "Aldar Properties"
+                    }
+                }
+            else:
+                return {"success": False, "error": "إجراء غير معروف في UAEPASS"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    # --- وظائف مساعدة ---
+    
+    def log_transaction(self, system: str, action: str, success: bool, details: str = ""):
+        """
+        تسجيل المعاملة لأغراض التدقيق
+        """
+        timestamp = datetime.now().isoformat()
+        log_entry = {
+            "timestamp": timestamp,
+            "system": system,
+            "action": action,
+            "success": success,
+            "details": details
+        }
+        # في بيئة حقيقية، يتم إرسال هذا السجل إلى نظام مركزي
+        print(f"📝 LOG: [{timestamp}] {action} on {system} → {'Success' if success else 'Failed'} | {details}")
+
+    def get_connection_status(self) -> Dict[str, Any]:
+        """
+        الحصول على حالة الاتصالات النشطة
+        """
+        return {
+            "active_connections": list(self.active_connections.keys()),
+            "count": len(self.active_connections),
+            "last_updated": datetime.now().isoformat()
+        }
